@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  passwordHash  String?       @map("password_hash")
+  name          String?
+  avatar        String?
+  timezone      String        @default("UTC")
+  pushToken     String?       @map("push_token")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  tasks         Task[]
+  appointments  Appointment[]
+  categories    Category[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  userId      String     @map("user_id")
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  dueDate     DateTime?  @map("due_date")
+  priority    Priority   @default(MEDIUM)
+  status      Status     @default(PENDING)
+  categoryId  String?    @map("category_id")
+  category    Category?  @relation(fields: [categoryId], references: [id])
+  reminders   Reminder[]
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@index([userId, status, dueDate])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+model Appointment {
+  id          String     @id @default(cuid())
+  userId      String     @map("user_id")
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  location    String?
+  startTime   DateTime   @map("start_time")
+  endTime     DateTime?  @map("end_time")
+  allDay      Boolean    @default(false) @map("all_day")
+  description String?
+  reminders   Reminder[]
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@index([userId, startTime])
+  @@index([startTime])
+  @@map("appointments")
+}
+
+model Reminder {
+  id            String        @id @default(cuid())
+  type          ReminderType
+  taskId        String?       @map("task_id")
+  task          Task?         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  appointmentId String?       @map("appointment_id")
+  appointment   Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  remindAt      DateTime      @map("remind_at")
+  sentAt        DateTime?     @map("sent_at")
+  channel       Channel       @default(PUSH)
+  jobId         String?       @map("job_id") // BullMQ job id for cancellation
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  @@index([remindAt, sentAt])
+  @@index([taskId])
+  @@index([appointmentId])
+  @@map("reminders")
+}
+
+model Category {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+  color  String @default("#3b82f6")
+  tasks  Task[]
+
+  @@index([userId])
+  @@map("categories")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum Status {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ReminderType {
+  TASK
+  APPOINTMENT
+  CUSTOM
+}
+
+enum Channel {
+  PUSH
+  EMAIL
+  SMS
+  EXTENSION
+}
